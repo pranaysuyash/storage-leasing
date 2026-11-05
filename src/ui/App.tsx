@@ -69,6 +69,17 @@ const ENV_OPTIONS = [
   { value: 'hazmat', label: 'Hazmat' },
 ];
 
+const COMMODITY_OPTIONS = [
+  { value: 'ambient_goods', label: 'Ambient goods' },
+  { value: 'perishable', label: 'Perishable' },
+  { value: 'frozen', label: 'Frozen' },
+  { value: 'hazmat', label: 'Hazmat' },
+  { value: 'documents', label: 'Documents' },
+  { value: 'equipment', label: 'Equipment' },
+  { value: 'agri', label: 'Agri' },
+  { value: 'other', label: 'Other' },
+];
+
 const BILLING_OPTIONS = [
   { value: 'sqft_month', label: '₹/sqft/month' },
   { value: 'pallet_day', label: '₹/pallet/day' },
@@ -162,6 +173,9 @@ export function App() {
     escalation: 0,
     billingCycleDay: 10,
   });
+  const [editingTenantId, setEditingTenantId] = useState<string | null>(null);
+  const [editTenantUse, setEditTenantUse] = useState('');
+  const [editTenantCommodity, setEditTenantCommodity] = useState<CommodityCategory>('ambient_goods');
   const [newMaint, setNewMaint] = useState({
     spaceId: '',
     category: 'roof' as MaintenanceTask['category'],
@@ -811,16 +825,7 @@ export function App() {
                     />
                     <Select
                       aria-label="Commodity category"
-                      data={[
-                        { value: 'ambient_goods', label: 'Ambient goods' },
-                        { value: 'perishable', label: 'Perishable' },
-                        { value: 'frozen', label: 'Frozen' },
-                        { value: 'hazmat', label: 'Hazmat' },
-                        { value: 'documents', label: 'Documents' },
-                        { value: 'equipment', label: 'Equipment' },
-                        { value: 'agri', label: 'Agri' },
-                        { value: 'other', label: 'Other' },
-                      ]}
+                      data={COMMODITY_OPTIONS}
                       value={newTenant.commodityCategory}
                       onChange={(v) => setNewTenant({ ...newTenant, commodityCategory: (v ?? 'other') as CommodityCategory })}
                     />
@@ -989,11 +994,13 @@ export function App() {
               </SectionCard>
 
               {tenants.length > 0 && (
-                <SectionCard title={`Tenants &amp; their spaces (${tenants.length})`}>
+                <SectionCard title={`Tenants & their spaces (${tenants.length})`}>
                   <Stack gap="sm">
                     {tenants.map((t) => {
                       const tLeases = leases.filter((l) => l.tenantId === t.id);
                       const totalRent = tLeases.reduce((s, l) => s + (l.rate || 0), 0);
+                      const isEditing = editingTenantId === t.id;
+                      const commodityLabel = COMMODITY_OPTIONS.find((o) => o.value === (t.commodityCategory ?? 'other'))?.label ?? t.commodityCategory ?? 'Other';
                       return (
                         <div
                           key={t.id}
@@ -1004,22 +1011,80 @@ export function App() {
                             background: 'var(--p09-bg-1)',
                           }}
                         >
-                          <Group justify="space-between" wrap="wrap">
-                            <div>
+                          <Group justify="space-between" wrap="wrap" align="flex-start">
+                            <div style={{ flex: 1, minWidth: 220 }}>
                               <Text fw={600} size="sm">
                                 {t.name}
                               </Text>
                               <Text size="xs" c="dimmed">
                                 {t.contactPerson} · {t.phone}
                                 {t.gstin ? ` · GSTIN ${t.gstin}` : ''}
-                                {t.intendedUse ? ` · ${t.intendedUse}` : ''}
                               </Text>
+                              {!isEditing && (
+                                <Text size="xs" c="dimmed" mt={4}>
+                                  Using for: {t.intendedUse || '—'} · Stored: {commodityLabel}
+                                </Text>
+                              )}
                             </div>
                             <Group gap="xs">
                               <StatusBadge tone="info">{tLeases.length} space{tLeases.length === 1 ? '' : 's'}</StatusBadge>
                               {totalRent > 0 && <Money value={totalRent} />}
+                              {!isEditing ? (
+                                <Button
+                                  size="xs"
+                                  variant="light"
+                                  onClick={() => {
+                                    setEditingTenantId(t.id);
+                                    setEditTenantUse(t.intendedUse ?? '');
+                                    setEditTenantCommodity(t.commodityCategory ?? 'ambient_goods');
+                                  }}
+                                >
+                                  Edit usage
+                                </Button>
+                              ) : null}
                             </Group>
                           </Group>
+                          {isEditing && (
+                            <Stack gap="xs" mt="sm">
+                              <Group gap="sm" wrap="wrap" align="flex-end">
+                                <TextInput
+                                  label="What's being stored / used for"
+                                  placeholder="e.g. FMCG cartons, auto parts, documents"
+                                  value={editTenantUse}
+                                  onChange={(e) => setEditTenantUse(e.currentTarget.value)}
+                                  style={{ flex: 1, minWidth: 220 }}
+                                />
+                                <Select
+                                  label="Commodity category"
+                                  data={COMMODITY_OPTIONS}
+                                  value={editTenantCommodity}
+                                  onChange={(v) => setEditTenantCommodity((v ?? 'other') as CommodityCategory)}
+                                  style={{ minWidth: 180 }}
+                                />
+                              </Group>
+                              <Group gap="xs">
+                                <Button
+                                  size="xs"
+                                  onClick={() => {
+                                    setTenants((prev) =>
+                                      prev.map((x) =>
+                                        x.id === t.id
+                                          ? { ...x, intendedUse: editTenantUse.trim() || undefined, commodityCategory: editTenantCommodity }
+                                          : x,
+                                      ),
+                                    );
+                                    setEditingTenantId(null);
+                                    flash('Tenant usage updated.');
+                                  }}
+                                >
+                                  Save
+                                </Button>
+                                <Button size="xs" variant="default" onClick={() => setEditingTenantId(null)}>
+                                  Cancel
+                                </Button>
+                              </Group>
+                            </Stack>
+                          )}
                           {tLeases.length > 0 ? (
                             <ul style={{ margin: '8px 0 0', paddingLeft: 18, fontSize: 12 }}>
                               {tLeases.map((l) => {
