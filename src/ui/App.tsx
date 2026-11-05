@@ -19,7 +19,6 @@ import {
 import {
   createTenant,
   createLease,
-  generateRentLedgerEntry,
   generateMonthlyRentLedgers,
   recordPayment,
   issueReceipt,
@@ -340,20 +339,17 @@ export function App() {
         space,
       );
       allocateSpaceAndLease(facility, space.id, tenant.id, lease, newLease.start);
-      const entry = generateRentLedgerEntry({
-        id: `RL-${Date.now()}`,
-        lease,
-        facilityId: facility.id,
-        spaceId: space.id,
-        tenantId: tenant.id,
-        periodStart: newLease.start.slice(0, 7) + '-01',
-        periodEnd: newLease.start.slice(0, 7) + '-28',
-        dueDate: newLease.start.slice(0, 7) + '-10',
-        electricityCharge: 0,
+      const billStart = lease.billingStartDate ?? lease.startDate;
+      const billDate = new Date(billStart);
+      const initialEntries = generateMonthlyRentLedgers({
+        leases: [lease],
+        periodYear: billDate.getFullYear(),
+        periodMonth: billDate.getMonth() + 1,
+        dueDayOfMonth: lease.billingCycleDay ?? 10,
       });
       if (!newLease.tenantId) setTenants((prev) => [...prev, tenant]);
       setLeases((prev) => [...prev, lease]);
-      setLedgerEntries((prev) => [...prev, entry]);
+      setLedgerEntries((prev) => [...prev, ...initialEntries]);
       setFacility({ ...facility, spaces: [...facility.spaces] });
       const wasExisting = !!newLease.tenantId;
       flash((wasExisting ? 'Additional space leased for existing tenant.' : 'Tenant onboarded and lease activated.') + usageWarning);
@@ -371,13 +367,17 @@ export function App() {
         periodYear: monthlyYear,
         periodMonth: monthlyMonth,
         dueDayOfMonth: 10,
+        existingEntries: ledgerEntries,
       });
       if (newEntries.length === 0) {
-        flash('No active leases for that period.');
+        flash('No new ledger entries for that period (active leases may already be billed).');
         return;
       }
-      setLedgerEntries((prev) => [...prev, ...newEntries]);
-      flash(`Generated ${newEntries.length} ledger entries.`);
+      setLedgerEntries((prev) => {
+        const ids = new Set(prev.map((e) => e.id));
+        return [...prev, ...newEntries.filter((e) => !ids.has(e.id))];
+      });
+      flash(`Generated ${newEntries.length} ledger entr${newEntries.length === 1 ? 'y' : 'ies'}.`);
     } catch (e) {
       flash((e as Error).message);
     }
@@ -390,12 +390,18 @@ export function App() {
         flash('Select a ledger entry to pay.');
         return;
       }
-      const amt = paymentAmount > 0 ? paymentAmount : entry.totalDue;
-      recordPayment(entry, amt, new Date().toISOString().slice(0, 10));
-      const r = issueReceipt(entry, new Date().toISOString().slice(0, 10));
+      const outstanding = Math.max(0, entry.totalDue - entry.amountPaid);
+      const amt = paymentAmount > 0 ? paymentAmount : outstanding;
+      if (amt <= 0) {
+        flash('Nothing outstanding to pay for this entry.');
+        return;
+      }
+      const paidDate = new Date().toISOString().slice(0, 10);
+      const result = recordPayment(entry, amt, paidDate);
+      const r = issueReceipt(entry, paidDate, amt);
       setReceipts((prev) => [...prev, r.receiptNumber]);
       setLedgerEntries((prev) => prev.map((e) => (e.id === entry.id ? { ...entry } : e)));
-      flash(`Payment recorded. Receipt ${r.receiptNumber}`);
+      flash(`Payment recorded (₹${result.applied} applied${result.overpaid > 0 ? `, ₹${result.overpaid} overpaid recorded` : ''}). Receipt ${r.receiptNumber}`);
     } catch (e) {
       flash((e as Error).message);
     }

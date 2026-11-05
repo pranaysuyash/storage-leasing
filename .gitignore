@@ -58,3 +58,8 @@ playwright/.cache/
 .local/
 docs/evidence/.chrome-profile/
 **/.chrome-profile/
+# Compiled outputs alongside TS sources (do not commit)
+src/**/*.js
+tests/**/*.js
+src/**/*.js.map
+tests/**/*.js.map

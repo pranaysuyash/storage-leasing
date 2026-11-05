@@ -150,7 +150,10 @@ export interface Lease {
   endDate?: string; // ISO date; omitted for month_to_month/indefinite
   billingCycleDay?: number; // day of month rent is due (1-28)
   billingUnit: BillingUnit;
-  rate: number; // per billing unit
+  /** Rate per billing unit (e.g., ₹/sqft/month, ₹/unit/month, ₹ fixed/month). */
+  rate: number;
+  /** Quantity the rate applies to (additive). sqft_month => leased sqft; fixed => 1; unit-based => units. */
+  billingQuantity?: number;
   escalationPercentPerYear: number;
   depositAmount: number;
   status: LeaseStatus;
@@ -180,10 +183,14 @@ export interface RentLedgerEntry {
   otherCharges: number;
   totalDue: number;
   amountPaid: number;
+  /** Amount received above totalDue, if any (additive; honest overpayment handling). */
+  overpaidAmount?: number;
   paymentStatus: PaymentStatus;
   dueDate: string;
   paidDate?: string;
   receiptNumber?: string;
+  /** Last transaction receipt details (additive). Full payment transaction ledger is a separate decision. */
+  lastReceiptAmount?: number;
   notes?: string;
 }
 
@@ -235,6 +242,8 @@ export interface MaintenanceTask {
   resolvedAt?: string;
   contractor?: string;
   photos?: string[];
+  /** Space status before maintenance started (additive). Restored on resolve/cancel to avoid freeing leased spaces. */
+  spaceStatusBeforeRepair?: SpaceStatus;
 }
 
 export interface TenantPortalAccess {
