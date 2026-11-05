@@ -52,6 +52,17 @@ export function createFacility(input: {
   };
 }
 
+function applySpaceStatus(space: RentableSpace, status: SpaceStatus, atIso = new Date().toISOString()): void {
+  const prev = space.status;
+  space.status = status;
+  space.statusChangedAt = atIso;
+  if (status === 'vacant') {
+    if (prev !== 'vacant' || !space.vacantSince) space.vacantSince = atIso;
+  } else {
+    delete space.vacantSince;
+  }
+}
+
 export function addSpace(facility: Facility, space: Omit<RentableSpace, 'facilityId' | 'areaSqFt'> & { areaSqFt?: number }): RentableSpace {
   const area = space.areaSqFt ?? computeAreaSqFt(space.dimensions);
   if (area <= 0) throw new Error('Space area must be positive.');
@@ -64,6 +75,8 @@ export function addSpace(facility: Facility, space: Omit<RentableSpace, 'facilit
     areaSqFt: area,
     spacePurpose: space.spacePurpose ?? 'for_lease',
   };
+  // Additive vacancy tracking (backward-compatible): initialize timestamps for current status.
+  applySpaceStatus(newSpace, newSpace.status);
   facility.spaces.push(newSpace);
   return newSpace;
 }
@@ -83,7 +96,7 @@ export function findSpaceByCode(facility: Facility, code: string): RentableSpace
 export function setSpaceStatus(facility: Facility, spaceId: string, status: SpaceStatus): RentableSpace {
   const space = findSpaceById(facility, spaceId);
   if (!space) throw new Error(`Space ${spaceId} not found.`);
-  space.status = status;
+  applySpaceStatus(space, status);
   return space;
 }
 
@@ -98,12 +111,14 @@ export function computeFacilityMetrics(
   blockedAreaSqFt: number;
   underRepairAreaSqFt: number;
   occupancyPercent: number;
+  modeledSpaceAreaSqFt: number;
   activeLeases: number;
   vacantSpaces: number;
 } {
   const leasedSpaceIds = new Set(leases.filter(l => l.status === 'active').map(l => l.spaceId));
-  let leasedArea = 0, vacantArea = 0, blockedArea = 0, repairArea = 0;
+  let leasedArea = 0, vacantArea = 0, blockedArea = 0, repairArea = 0, modeledSpaceArea = 0;
   for (const space of facility.spaces) {
+    modeledSpaceArea += space.areaSqFt;
     switch (space.status) {
       case 'leased':
         leasedArea += space.areaSqFt;
@@ -120,6 +135,8 @@ export function computeFacilityMetrics(
         break;
     }
   }
+  // Occupancy uses facility-level usable capacity (property-level, manual) to preserve
+  // existing semantics. UI surfaces modeledSpaceAreaSqFt and any delta for transparency.
   const occupancyPercent = facility.usableAreaSqFt > 0
     ? Math.round((leasedArea / facility.usableAreaSqFt) * 100)
     : 0;
@@ -131,6 +148,7 @@ export function computeFacilityMetrics(
     blockedAreaSqFt: blockedArea,
     underRepairAreaSqFt: repairArea,
     occupancyPercent,
+    modeledSpaceAreaSqFt: modeledSpaceArea,
     activeLeases: leasedSpaceIds.size,
     vacantSpaces: facility.spaces.filter(s => s.status === 'vacant').length,
   };
@@ -222,14 +240,14 @@ export function allocateSpace(facility: Facility, spaceId: string, tenantId: str
   if (space.status !== 'vacant' && space.status !== 'temporarily_reserved') {
     throw new Error(`Space ${space.code} is not available for allocation (status: ${space.status}).`);
   }
-  space.status = 'leased';
+  applySpaceStatus(space, 'leased');
   return { spaceId, tenantId, leaseId, possessionDate, allocatedAt: new Date().toISOString() };
 }
 
 export function releaseSpace(facility: Facility, spaceId: string): void {
   const space = findSpaceById(facility, spaceId);
   if (!space) throw new Error(`Space ${spaceId} not found.`);
-  space.status = 'vacant';
+  applySpaceStatus(space, 'vacant');
 }
 
 export function getSpacesByStatus(facility: Facility, status: import('./types').SpaceStatus): RentableSpace[] {
@@ -276,7 +294,7 @@ export function allocateSpaceAndLease(
   if (space.status !== 'vacant' && space.status !== 'temporarily_reserved') {
     throw new Error(`Space ${space.code} is not available (status: ${space.status}).`);
   }
-  space.status = 'leased';
+  applySpaceStatus(space, 'leased');
   lease.status = 'active';
   lease.possessionDate = possessionDate;
   return { spaceId, tenantId, leaseId: lease.id, possessionDate, allocatedAt: new Date().toISOString() };
