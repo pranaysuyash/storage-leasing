@@ -14,13 +14,18 @@ export interface CreateLeaseInput {
   facilityId: string;
   spaceId: string;
   tenantId: string;
+  leaseType?: import('./types').LeaseType;
+  agreementDate?: string;
+  depositDate?: string;
   startDate: string;
-  endDate: string;
+  possessionDate?: string;
+  billingStartDate?: string;
+  endDate?: string;
+  billingCycleDay?: number;
   billingUnit: BillingUnit;
   rate: number;
   escalationPercentPerYear?: number;
   depositAmount?: number;
-  possessionDate?: string;
   isRenewal?: boolean;
   intendedUse?: string;
   commodityCategory?: import('./types').CommodityCategory;
@@ -28,7 +33,14 @@ export interface CreateLeaseInput {
 
 export function createLease(input: CreateLeaseInput, space: RentableSpace): Lease {
   if (input.rate < 0) throw new Error('Lease rate cannot be negative.');
-  if (input.startDate >= input.endDate) throw new Error('Lease end date must be after start date.');
+  const leaseType = input.leaseType ?? 'fixed_term';
+  const startDate = input.billingStartDate ?? input.startDate;
+  if (leaseType === 'fixed_term') {
+    if (!input.endDate) throw new Error('Fixed-term lease requires an end date.');
+    if (input.startDate >= input.endDate) throw new Error('Lease end date must be after start date.');
+  } else if (input.endDate && input.startDate >= input.endDate) {
+    throw new Error('Lease end date must be after start date.');
+  }
   if (input.isRenewal) {
     if (space.status !== 'vacant' && space.status !== 'temporarily_reserved' && space.status !== 'leased') {
       throw new Error(`Space ${space.code} is not available for leasing (status: ${space.status}).`);
@@ -43,14 +55,19 @@ export function createLease(input: CreateLeaseInput, space: RentableSpace): Leas
     facilityId: input.facilityId,
     spaceId: input.spaceId,
     tenantId: input.tenantId,
+    leaseType,
+    agreementDate: input.agreementDate,
+    depositDate: input.depositDate,
     startDate: input.startDate,
+    possessionDate: input.possessionDate ?? input.startDate,
+    billingStartDate: startDate,
     endDate: input.endDate,
+    billingCycleDay: input.billingCycleDay,
     billingUnit: input.billingUnit,
     rate: input.rate,
     escalationPercentPerYear: input.escalationPercentPerYear ?? 0,
     depositAmount: input.depositAmount ?? 0,
     status: 'draft',
-    possessionDate: input.possessionDate,
     intendedUse: input.intendedUse,
     commodityCategory: input.commodityCategory,
     createdAt: new Date().toISOString(),
@@ -225,6 +242,7 @@ export function computeRentSummary(entries: RentLedgerEntry[]): {
 
 export function isLeaseExpiringSoon(lease: Lease, asOfDate: string, daysThreshold: number = 30): boolean {
   if (lease.status !== 'active') return false;
+  if (!lease.endDate) return false; // indefinite / month-to-month: never "expiring soon" by date
   const end = new Date(lease.endDate);
   const asOf = new Date(asOfDate);
   const diffDays = (end.getTime() - asOf.getTime()) / (1000 * 60 * 60 * 24);
@@ -273,22 +291,28 @@ export function generateMonthlyRentLedgers(input: {
   const periodStart = `${periodYear}-${month}-01`;
   const lastDay = new Date(periodYear, periodMonth, 0).getDate();
   const periodEnd = `${periodYear}-${month}-${String(lastDay).padStart(2, '0')}`;
-  const dueDay = Math.min(input.dueDayOfMonth ?? 10, lastDay);
-  const dueDate = `${periodYear}-${month}-${String(dueDay).padStart(2, '0')}`;
-
   const entries: RentLedgerEntry[] = [];
   for (const lease of leases) {
     if (lease.status !== 'active') continue;
+    const billStart = lease.billingStartDate ?? lease.startDate;
+    const leaseEnd = lease.endDate; // undefined => indefinite
     // only leases overlapping the period
-    if (lease.startDate > periodEnd || lease.endDate < periodStart) continue;
+    if (billStart > periodEnd) continue;
+    if (leaseEnd && leaseEnd < periodStart) continue;
+    // prorate first period: start on the later of periodStart / billStart
+    const effectiveStart = billStart > periodStart ? billStart : periodStart;
+    const effectiveEnd = leaseEnd && leaseEnd < periodEnd ? leaseEnd : periodEnd;
+    if (effectiveStart > effectiveEnd) continue;
+    const dueDay = Math.min(lease.billingCycleDay ?? (input.dueDayOfMonth ?? 10), new Date(periodEnd).getDate());
+    const dueDate = `${periodYear}-${month}-${String(dueDay).padStart(2, '0')}`;
     entries.push(generateRentLedgerEntry({
       id: `RL-${lease.id}-${periodYear}-${month}`,
       lease,
       facilityId: lease.facilityId,
       spaceId: lease.spaceId,
       tenantId: lease.tenantId,
-      periodStart,
-      periodEnd,
+      periodStart: effectiveStart,
+      periodEnd: effectiveEnd,
       dueDate,
       electricityCharge: input.electricityByLease?.[lease.id] ?? 0,
       maintenanceCharge: input.maintenanceByLease?.[lease.id] ?? 0,

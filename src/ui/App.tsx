@@ -133,14 +133,19 @@ export function App() {
   });
   const [newTenant, setNewTenant] = useState({ name: '', gstin: '', contactPerson: '', phone: '', address: '', intendedUse: '', commodityCategory: 'ambient_goods' as CommodityCategory });
   const [newLease, setNewLease] = useState({
+    leaseType: 'fixed_term' as Lease['leaseType'],
+    agreementDate: '',
+    depositDate: '',
     spaceId: '',
     tenantId: '',
     start: '',
+    billingStart: '',
     end: '',
     rate: 0,
     billing: 'sqft_month' as Lease['billingUnit'],
     deposit: 0,
     escalation: 0,
+    billingCycleDay: 10,
   });
   const [newMaint, setNewMaint] = useState({
     spaceId: '',
@@ -219,8 +224,9 @@ export function App() {
       if (!newTenant.contactPerson.trim()) throw new Error('Contact person is required.');
       if (!newTenant.phone.trim()) throw new Error('Phone is required.');
       if (!newLease.spaceId) throw new Error('Select a space.');
-      if (!newLease.start || !newLease.end) throw new Error('Start and end dates are required.');
-      if (newLease.start >= newLease.end) throw new Error('End date must be after start date.');
+      if (!newLease.start) throw new Error('Start date is required.');
+      if (newLease.leaseType === 'fixed_term' && !newLease.end) throw new Error('End date is required for fixed-term leases.');
+      if (newLease.end && newLease.start >= newLease.end) throw new Error('End date must be after start date.');
       if (newLease.rate <= 0) throw new Error('Rate must be positive.');
       const tenant = createTenant({
         id: `T-${Date.now()}`,
@@ -248,8 +254,13 @@ export function App() {
           facilityId: facility.id,
           spaceId: space.id,
           tenantId: tenant.id,
+          leaseType: newLease.leaseType,
+          agreementDate: newLease.agreementDate || undefined,
+          depositDate: newLease.depositDate || undefined,
           startDate: newLease.start,
-          endDate: newLease.end,
+          billingStartDate: newLease.billingStart || undefined,
+          endDate: newLease.end || undefined,
+          billingCycleDay: newLease.billingCycleDay,
           billingUnit: newLease.billing,
           rate: newLease.rate,
           escalationPercentPerYear: newLease.escalation,
@@ -769,11 +780,42 @@ export function App() {
                       value={newLease.spaceId || null}
                       onChange={(v) => setNewLease({ ...newLease, spaceId: v ?? '' })}
                     />
+                    <Select
+                      aria-label="Lease type"
+                      data={[
+                        { value: 'fixed_term', label: 'Fixed term' },
+                        { value: 'month_to_month', label: 'Month-to-month' },
+                        { value: 'indefinite', label: 'Indefinite' },
+                      ]}
+                      value={newLease.leaseType}
+                      onChange={(v) => setNewLease({ ...newLease, leaseType: (v ?? 'fixed_term') as Lease['leaseType'] })}
+                    />
+                    <TextInput
+                      type="date"
+                      aria-label="Agreement date"
+                      placeholder="Agreement date"
+                      value={newLease.agreementDate}
+                      onChange={(e) => setNewLease({ ...newLease, agreementDate: e.currentTarget.value })}
+                    />
+                    <TextInput
+                      type="date"
+                      aria-label="Deposit date"
+                      placeholder="Deposit date"
+                      value={newLease.depositDate}
+                      onChange={(e) => setNewLease({ ...newLease, depositDate: e.currentTarget.value })}
+                    />
                     <TextInput
                       type="date"
                       aria-label="Lease start"
                       value={newLease.start}
                       onChange={(e) => setNewLease({ ...newLease, start: e.currentTarget.value })}
+                    />
+                    <TextInput
+                      type="date"
+                      aria-label="Billing start"
+                      placeholder="Billing start"
+                      value={newLease.billingStart}
+                      onChange={(e) => setNewLease({ ...newLease, billingStart: e.currentTarget.value })}
                     />
                     <TextInput
                       type="date"

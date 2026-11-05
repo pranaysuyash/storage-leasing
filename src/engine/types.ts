@@ -109,6 +109,8 @@ export type CommodityCategory =
   | 'agri'
   | 'other';
 
+export type LeaseType = 'fixed_term' | 'month_to_month' | 'indefinite';
+
 export interface Tenant {
   id: string;
   name: string;
@@ -127,16 +129,21 @@ export interface Lease {
   facilityId: string;
   spaceId: string;
   tenantId: string;
-  startDate: string; // ISO date
-  endDate: string; // ISO date
+  leaseType: LeaseType;
+  agreementDate?: string; // date the lease agreement was signed
+  depositDate?: string; // date the deposit was received (may precede possession)
+  startDate: string; // service/billing start (possession) ISO date
+  possessionDate?: string; // physical handover date (defaults to startDate)
+  billingStartDate?: string; // first billable day (defaults to startDate)
+  endDate?: string; // ISO date; omitted for month_to_month/indefinite
+  billingCycleDay?: number; // day of month rent is due (1-28)
   billingUnit: BillingUnit;
   rate: number; // per billing unit
   escalationPercentPerYear: number;
   depositAmount: number;
   status: LeaseStatus;
-  possessionDate?: string;
   renewalOfLeaseId?: string;
-  intendedUse?: string; // inherited from tenant at onboarding, editable per lease
+  intendedUse?: string;
   commodityCategory?: CommodityCategory;
   createdAt: string;
 }
