@@ -193,6 +193,11 @@ export function App() {
   const [paymentAmount, setPaymentAmount] = useState(0);
   const [paymentEntryId, setPaymentEntryId] = useState('');
   const [ledgerFilter, setLedgerFilter] = useState<'all' | 'pending' | 'overdue' | 'partial' | 'paid'>('all');
+  const [spaceSearch, setSpaceSearch] = useState('');
+  const [spaceStatusFilter, setSpaceStatusFilter] = useState<string>('all');
+  const [spaceBuildingFilter, setSpaceBuildingFilter] = useState<string>('all');
+  const [leaseStatusFilter, setLeaseStatusFilter] = useState<string>('all');
+  void spaceSearch; void setSpaceSearch; void spaceStatusFilter; void setSpaceStatusFilter; void spaceBuildingFilter; void setSpaceBuildingFilter; void leaseStatusFilter; void setLeaseStatusFilter;
   const [monthlyYear, setMonthlyYear] = useState(new Date().getFullYear());
   const [monthlyMonth, setMonthlyMonth] = useState(new Date().getMonth() + 1);
 
