@@ -13,6 +13,7 @@ import {
   createFacility,
   addSpace,
   allocateSpaceAndLease,
+  allocateActualBill,
 } from '../engine/facilityModel';
 import {
   createTenant,
@@ -155,6 +156,8 @@ export function App() {
     cost: 0,
   });
   const [newMeter, setNewMeter] = useState({ spaceId: '', kwh: 0 });
+  const [actualBill, setActualBill] = useState(0);
+  const [billAllocation, setBillAllocation] = useState<{ spaceId: string; kwh: number; sharePct: number; allocated: number }[] | null>(null);
   const [paymentAmount, setPaymentAmount] = useState(0);
   const [paymentEntryId, setPaymentEntryId] = useState('');
   const [monthlyYear, setMonthlyYear] = useState(new Date().getFullYear());
@@ -1184,6 +1187,39 @@ export function App() {
                       Record Reading
                     </Button>
                   </Group>
+                </Stack>
+              </SectionCard>
+
+              <SectionCard title="Allocate Actual Utility Bill" subtitle="Split the real bill across tenants by sub-meter kWh (not a flat per-sqft rate).">
+                <Stack gap="sm">
+                  <Group gap="sm" wrap="wrap">
+                    <NumberInput
+                      aria-label="Actual bill amount"
+                      placeholder="Total bill ₹"
+                      value={actualBill || ''}
+                      onChange={(v) => setActualBill(Number(v) || 0)}
+                      min={0}
+                      w={140}
+                    />
+                    <Button color="teal" onClick={() => {
+                      const subs = meterReadings.map((m) => ({ spaceId: m.spaceId, kwh: m.kwh }));
+                      setBillAllocation(allocateActualBill({ totalBill: actualBill, subReadings: subs }));
+                    }}>
+                      Allocate
+                    </Button>
+                  </Group>
+                  {billAllocation && (
+                    <div style={{ overflowX: 'auto' }}>
+                      <table className="data-table">
+                        <thead><tr><th scope="col">Space</th><th scope="col" style={{ textAlign: 'right' }}>kWh</th><th scope="col" style={{ textAlign: 'right' }}>Share %</th><th scope="col" style={{ textAlign: 'right' }}>Allocated ₹</th></tr></thead>
+                        <tbody>
+                          {billAllocation.map((a) => (
+                            <tr key={a.spaceId}><td>{a.spaceId}</td><td style={{ textAlign: 'right' }}>{a.kwh}</td><td style={{ textAlign: 'right' }}>{a.sharePct}</td><td style={{ textAlign: 'right' }}>{a.allocated}</td></tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </Stack>
               </SectionCard>
 
