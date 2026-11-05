@@ -33,7 +33,7 @@ import {
   cancelMaintenance,
   costVariance,
 } from '../engine/maintenanceEngine';
-import type { RentableSpace, Lease, MaintenanceTask, CommodityCategory } from '../engine/types';
+import type { RentableSpace, Lease, MaintenanceTask, CommodityCategory, Tenant } from '../engine/types';
 
 const OWNERSHIP_OPTIONS = [
   { value: 'owned', label: 'Owned (I own this building)' },
@@ -53,6 +53,12 @@ const SPACE_TYPE_OPTIONS = [
   { value: 'unit', label: 'Unit' },
   { value: 'cold_chamber', label: 'Cold Chamber' },
   { value: 'open_yard', label: 'Open Yard' },
+  { value: 'container', label: 'Container' },
+  { value: 'silo', label: 'Silo' },
+  { value: 'tank', label: 'Tank' },
+  { value: 'rack', label: 'Rack' },
+  { value: 'locker', label: 'Locker' },
+  { value: 'parking_bay', label: 'Parking Bay' },
 ];
 
 const ENV_OPTIONS = [
@@ -223,24 +229,31 @@ export function App() {
       return;
     }
     try {
-      if (!newTenant.name.trim()) throw new Error('Tenant name is required.');
-      if (!newTenant.contactPerson.trim()) throw new Error('Contact person is required.');
-      if (!newTenant.phone.trim()) throw new Error('Phone is required.');
       if (!newLease.spaceId) throw new Error('Select a space.');
       if (!newLease.start) throw new Error('Start date is required.');
       if (newLease.leaseType === 'fixed_term' && !newLease.end) throw new Error('End date is required for fixed-term leases.');
       if (newLease.end && newLease.start >= newLease.end) throw new Error('End date must be after start date.');
       if (newLease.rate <= 0) throw new Error('Rate must be positive.');
-      const tenant = createTenant({
-        id: `T-${Date.now()}`,
-        name: newTenant.name,
-        gstin: newTenant.gstin || undefined,
-        contactPerson: newTenant.contactPerson,
-        phone: newTenant.phone,
-        address: newTenant.address,
-        intendedUse: newTenant.intendedUse || undefined,
-        commodityCategory: newTenant.commodityCategory,
-      });
+      let tenant: Tenant;
+      if (newLease.tenantId) {
+        const existing = tenants.find((t) => t.id === newLease.tenantId);
+        if (!existing) throw new Error('Selected tenant not found.');
+        tenant = existing;
+      } else {
+        if (!newTenant.name.trim()) throw new Error('Tenant name is required.');
+        if (!newTenant.contactPerson.trim()) throw new Error('Contact person is required.');
+        if (!newTenant.phone.trim()) throw new Error('Phone is required.');
+        tenant = createTenant({
+          id: `T-${Date.now()}`,
+          name: newTenant.name,
+          gstin: newTenant.gstin || undefined,
+          contactPerson: newTenant.contactPerson,
+          phone: newTenant.phone,
+          address: newTenant.address,
+          intendedUse: newTenant.intendedUse || undefined,
+          commodityCategory: newTenant.commodityCategory,
+        });
+      }
       const space = facility.spaces.find((s) => s.id === newLease.spaceId);
       if (!space) throw new Error('Select a valid space.');
       // Soft compliance check: warn (do not block) if intended commodity needs a colder/hazmat class than the space provides.
@@ -285,11 +298,14 @@ export function App() {
         dueDate: newLease.start.slice(0, 7) + '-10',
         electricityCharge: 0,
       });
-      setTenants((prev) => [...prev, tenant]);
+      if (!newLease.tenantId) setTenants((prev) => [...prev, tenant]);
       setLeases((prev) => [...prev, lease]);
       setLedgerEntries((prev) => [...prev, entry]);
       setFacility({ ...facility, spaces: [...facility.spaces] });
-      flash('Tenant onboarded and lease activated.' + usageWarning);
+      const wasExisting = !!newLease.tenantId;
+      flash((wasExisting ? 'Additional space leased for existing tenant.' : 'Tenant onboarded and lease activated.') + usageWarning);
+      setNewLease({ spaceId: '', tenantId: '', start: '', end: '', rate: 0, billing: 'sqft_month', deposit: 0, escalation: 0, leaseType: 'fixed_term', agreementDate: '', depositDate: '', billingStart: '', billingCycleDay: 10 });
+      setNewTenant({ name: '', gstin: '', contactPerson: '', phone: '', address: '', intendedUse: '', commodityCategory: 'ambient_goods' });
     } catch (e) {
       flash((e as Error).message);
     }
@@ -680,6 +696,7 @@ export function App() {
                         <th scope="col">Type</th>
                         <th scope="col" style={{ textAlign: 'right' }}>Area</th>
                         <th scope="col">Status</th>
+                        <th scope="col">Tenant</th>
                         <th scope="col">Env</th>
                       </tr>
                     </thead>
@@ -705,6 +722,13 @@ export function App() {
                               {s.status}
                             </StatusBadge>
                           </td>
+                          <td>
+                            {(() => {
+                              const l = leases.find((x) => x.spaceId === s.id && (x.status === 'active' || x.status === 'draft'));
+                              const t = l ? tenants.find((x) => x.id === l.tenantId) : undefined;
+                              return t ? t.name : '—';
+                            })()}
+                          </td>
                           <td>{s.environmentalClass}</td>
                         </tr>
                       ))}
@@ -720,6 +744,19 @@ export function App() {
             <Stack gap="md">
               <SectionCard title="Onboard Tenant &amp; Create Lease">
                 <Stack gap="sm">
+                  <Group gap="sm" wrap="wrap">
+                    <Select
+                      aria-label="Tenant"
+                      placeholder="New tenant, or pick existing"
+                      data={[
+                        { value: '', label: '— New tenant —' },
+                        ...tenants.map((t) => ({ value: t.id, label: `${t.name}${t.gstin ? ` (${t.gstin})` : ''}` })),
+                      ]}
+                      value={newLease.tenantId || null}
+                      onChange={(v) => setNewLease({ ...newLease, tenantId: v ?? '' })}
+                    />
+                  </Group>
+                  {newLease.tenantId === '' && (
                   <Group gap="sm" wrap="wrap">
                     <TextInput
                       aria-label="Tenant name"
@@ -773,6 +810,7 @@ export function App() {
                       onChange={(v) => setNewTenant({ ...newTenant, commodityCategory: (v ?? 'other') as CommodityCategory })}
                     />
                   </Group>
+                  )}
                   <Group gap="sm" wrap="wrap">
                     <Select
                       aria-label="Select vacant space"
@@ -934,6 +972,64 @@ export function App() {
                   </Text>
                 )}
               </SectionCard>
+
+              {tenants.length > 0 && (
+                <SectionCard title={`Tenants &amp; their spaces (${tenants.length})`}>
+                  <Stack gap="sm">
+                    {tenants.map((t) => {
+                      const tLeases = leases.filter((l) => l.tenantId === t.id);
+                      const totalRent = tLeases.reduce((s, l) => s + (l.rate || 0), 0);
+                      return (
+                        <div
+                          key={t.id}
+                          style={{
+                            padding: 12,
+                            borderRadius: 8,
+                            border: '1px solid var(--p09-border)',
+                            background: 'var(--p09-bg-1)',
+                          }}
+                        >
+                          <Group justify="space-between" wrap="wrap">
+                            <div>
+                              <Text fw={600} size="sm">
+                                {t.name}
+                              </Text>
+                              <Text size="xs" c="dimmed">
+                                {t.contactPerson} · {t.phone}
+                                {t.gstin ? ` · GSTIN ${t.gstin}` : ''}
+                                {t.intendedUse ? ` · ${t.intendedUse}` : ''}
+                              </Text>
+                            </div>
+                            <Group gap="xs">
+                              <StatusBadge tone="info">{tLeases.length} space{tLeases.length === 1 ? '' : 's'}</StatusBadge>
+                              {totalRent > 0 && <Money value={totalRent} />}
+                            </Group>
+                          </Group>
+                          {tLeases.length > 0 ? (
+                            <ul style={{ margin: '8px 0 0', paddingLeft: 18, fontSize: 12 }}>
+                              {tLeases.map((l) => {
+                                const space = facility.spaces.find((s) => s.id === l.spaceId);
+                                return (
+                                  <li key={l.id}>
+                                    {space ? `${space.code} (${space.areaSqFt} sq ft)` : l.spaceId} · {l.billingUnit} · ₹{l.rate} ·{' '}
+                                    <StatusBadge tone={l.status === 'active' ? 'success' : l.status === 'expired' ? 'danger' : 'neutral'}>
+                                      {l.status}
+                                    </StatusBadge>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          ) : (
+                            <Text size="xs" c="dimmed" mt={6}>
+                              No spaces leased yet.
+                            </Text>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </Stack>
+                </SectionCard>
+              )}
             </Stack>
           </Tabs.Panel>
 
@@ -992,6 +1088,7 @@ export function App() {
                       <thead>
                         <tr>
                           <th scope="col">ID</th>
+                          <th scope="col">Tenant</th>
                           <th scope="col">Period</th>
                           <th scope="col" style={{ textAlign: 'right' }}>Base</th>
                           <th scope="col" style={{ textAlign: 'right' }}>Elec</th>
@@ -1005,6 +1102,7 @@ export function App() {
                         {ledgerEntries.map((e) => (
                           <tr key={e.id}>
                             <td className="mono">{e.id.slice(0, 14)}</td>
+                            <td>{tenants.find((t) => t.id === e.tenantId)?.name ?? e.tenantId.slice(0, 8)}</td>
                             <td>
                               {e.periodStart}→{e.periodEnd}
                             </td>
