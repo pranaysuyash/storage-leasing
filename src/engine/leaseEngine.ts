@@ -22,6 +22,8 @@ export interface CreateLeaseInput {
   depositAmount?: number;
   possessionDate?: string;
   isRenewal?: boolean;
+  intendedUse?: string;
+  commodityCategory?: import('./types').CommodityCategory;
 }
 
 export function createLease(input: CreateLeaseInput, space: RentableSpace): Lease {
@@ -49,6 +51,8 @@ export function createLease(input: CreateLeaseInput, space: RentableSpace): Leas
     depositAmount: input.depositAmount ?? 0,
     status: 'draft',
     possessionDate: input.possessionDate,
+    intendedUse: input.intendedUse,
+    commodityCategory: input.commodityCategory,
     createdAt: new Date().toISOString(),
   };
 }
@@ -235,6 +239,7 @@ export function renewLease(oldLease: Lease, newLease: Lease): void {
 
 export function createTenant(input: {
   id: string; name: string; gstin?: string; contactPerson: string; phone: string; email?: string; address?: string;
+  intendedUse?: string; commodityCategory?: import('./types').CommodityCategory;
 }): import('./types').Tenant {
   if (input.gstin && !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(input.gstin)) {
     throw new Error('Invalid GSTIN format.');
@@ -248,6 +253,8 @@ export function createTenant(input: {
     phone: input.phone,
     email: input.email,
     address: input.address,
+    intendedUse: input.intendedUse,
+    commodityCategory: input.commodityCategory,
     createdAt: new Date().toISOString(),
   };
 }

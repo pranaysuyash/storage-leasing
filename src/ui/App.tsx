@@ -32,7 +32,7 @@ import {
   cancelMaintenance,
   costVariance,
 } from '../engine/maintenanceEngine';
-import type { RentableSpace, Lease, MaintenanceTask } from '../engine/types';
+import type { RentableSpace, Lease, MaintenanceTask, CommodityCategory } from '../engine/types';
 
 const OWNERSHIP_OPTIONS = [
   { value: 'owned', label: 'Owned (I own this building)' },
@@ -131,7 +131,7 @@ export function App() {
     widthFt: 0,
     env: 'ambient' as RentableSpace['environmentalClass'],
   });
-  const [newTenant, setNewTenant] = useState({ name: '', gstin: '', contactPerson: '', phone: '', address: '' });
+  const [newTenant, setNewTenant] = useState({ name: '', gstin: '', contactPerson: '', phone: '', address: '', intendedUse: '', commodityCategory: 'ambient_goods' as CommodityCategory });
   const [newLease, setNewLease] = useState({
     spaceId: '',
     tenantId: '',
@@ -229,9 +229,19 @@ export function App() {
         contactPerson: newTenant.contactPerson,
         phone: newTenant.phone,
         address: newTenant.address,
+        intendedUse: newTenant.intendedUse || undefined,
+        commodityCategory: newTenant.commodityCategory,
       });
       const space = facility.spaces.find((s) => s.id === newLease.spaceId);
       if (!space) throw new Error('Select a valid space.');
+      // Soft compliance check: warn (do not block) if intended commodity needs a colder/hazmat class than the space provides.
+      const commodity = newTenant.commodityCategory;
+      const spaceEnv = space.environmentalClass;
+      const needsCold = commodity === 'frozen' || commodity === 'perishable';
+      const needsHazmat = commodity === 'hazmat';
+      let usageWarning = '';
+      if (needsHazmat && spaceEnv !== 'hazmat') usageWarning = ' Warning: hazmat commodity in a non-hazmat space — verify compliance.';
+      else if (needsCold && spaceEnv === 'ambient') usageWarning = ' Warning: cold commodity in an ambient space — verify temperature control.';
       const lease = createLease(
         {
           id: `LEASE-${Date.now()}`,
@@ -244,6 +254,8 @@ export function App() {
           rate: newLease.rate,
           escalationPercentPerYear: newLease.escalation,
           depositAmount: newLease.deposit,
+          intendedUse: newTenant.intendedUse || undefined,
+          commodityCategory: newTenant.commodityCategory,
         },
         space,
       );
@@ -263,7 +275,7 @@ export function App() {
       setLeases((prev) => [...prev, lease]);
       setLedgerEntries((prev) => [...prev, entry]);
       setFacility({ ...facility, spaces: [...facility.spaces] });
-      flash('Tenant onboarded and lease activated.');
+      flash('Tenant onboarded and lease activated.' + usageWarning);
     } catch (e) {
       flash((e as Error).message);
     }
@@ -562,6 +574,35 @@ export function App() {
                 <StatCard label="Open maintenance" value={maintSummary.openCount + maintSummary.inProgressCount} />
               </div>
 
+              {receipts.length > 0 && (
+                <SectionCard title="Receipts Issued">
+                  <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13 }}>
+                    {receipts.map((r) => (
+                      <li key={r}>{r}</li>
+                    ))}
+                  </ul>
+                </SectionCard>
+              )}
+
+              {facility.spaces.length === 0 && (
+                <EmptyState
+                  title="No spaces yet"
+                  hint="Add your first rentable space on the Spaces tab. Spaces drive occupancy, leasing, and electricity charges."
+                  action="Go to Spaces"
+                  onAction={() => setTab('spaces')}
+                />
+              )}
+
+              {overdueCount > 0 && (
+                <div className="notice notice--danger">
+                  <strong>Overdue Entries ({overdueCount})</strong>
+                </div>
+              )}
+            </Stack>
+          </Tabs.Panel>
+
+          <Tabs.Panel value="spaces" pt="md">
+            <Stack gap="md">
               <SectionCard title="Add Space" subtitle="Define a rentable space in the facility.">
                 <Stack gap="sm">
                   <Group gap="sm" wrap="wrap">
@@ -612,36 +653,10 @@ export function App() {
                 </Stack>
               </SectionCard>
 
-              {receipts.length > 0 && (
-                <SectionCard title="Receipts Issued">
-                  <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13 }}>
-                    {receipts.map((r) => (
-                      <li key={r}>{r}</li>
-                    ))}
-                  </ul>
-                </SectionCard>
-              )}
-
-              {facility.spaces.length === 0 && (
-                <EmptyState
-                  title="No spaces yet"
-                  hint="Define your first rentable space above. Spaces drive occupancy, leasing, and electricity charges."
-                />
-              )}
-
-              {overdueCount > 0 && (
-                <div className="notice notice--danger">
-                  <strong>Overdue Entries ({overdueCount})</strong>
-                </div>
-              )}
-            </Stack>
-          </Tabs.Panel>
-
-          <Tabs.Panel value="spaces" pt="md">
-            <SectionCard title="Facility Spaces" subtitle={metrics ? `Utilization: ${metrics.occupancyPercent}% leased` : undefined}>
-              {facility.spaces.length === 0 ? (
-                <EmptyState title="No spaces yet" hint="Add one on the Overview tab." action="Go to Overview" onAction={() => setTab('overview')} />
-              ) : (
+              <SectionCard title="Facility Spaces" subtitle={metrics ? `Utilization: ${metrics.occupancyPercent}% leased` : undefined}>
+                {facility.spaces.length === 0 ? (
+                  <EmptyState title="No spaces yet" hint="Define your first rentable space above. Spaces drive occupancy, leasing, and electricity charges." />
+                ) : (
                 <div style={{ overflowX: 'auto' }}>
                   <table className="data-table">
                     <thead>
@@ -684,6 +699,7 @@ export function App() {
                 </div>
               )}
             </SectionCard>
+            </Stack>
           </Tabs.Panel>
 
           <Tabs.Panel value="leases" pt="md">
@@ -720,6 +736,27 @@ export function App() {
                       placeholder="Address"
                       value={newTenant.address}
                       onChange={(e) => setNewTenant({ ...newTenant, address: e.currentTarget.value })}
+                    />
+                    <TextInput
+                      aria-label="Intended use"
+                      placeholder="What will tenant store/use?"
+                      value={newTenant.intendedUse}
+                      onChange={(e) => setNewTenant({ ...newTenant, intendedUse: e.currentTarget.value })}
+                    />
+                    <Select
+                      aria-label="Commodity category"
+                      data={[
+                        { value: 'ambient_goods', label: 'Ambient goods' },
+                        { value: 'perishable', label: 'Perishable' },
+                        { value: 'frozen', label: 'Frozen' },
+                        { value: 'hazmat', label: 'Hazmat' },
+                        { value: 'documents', label: 'Documents' },
+                        { value: 'equipment', label: 'Equipment' },
+                        { value: 'agri', label: 'Agri' },
+                        { value: 'other', label: 'Other' },
+                      ]}
+                      value={newTenant.commodityCategory}
+                      onChange={(v) => setNewTenant({ ...newTenant, commodityCategory: (v ?? 'other') as CommodityCategory })}
                     />
                   </Group>
                   <Group gap="sm" wrap="wrap">

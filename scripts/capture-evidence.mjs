@@ -212,7 +212,7 @@ async function main() {
 
     const tabs = args.tabs || DEFAULT_TABS;
     const suffix = args.width < 700 ? `-${args.width}` : '';
-
+    
     for (const tab of tabs) {
       const clicked = await evaluate(`(() => {
         const wanted = ${JSON.stringify(tab)}.toLowerCase();

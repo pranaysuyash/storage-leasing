@@ -99,6 +99,16 @@ export interface RentableSpace {
   notes?: string;
 }
 
+export type CommodityCategory =
+  | 'ambient_goods'
+  | 'perishable'
+  | 'frozen'
+  | 'hazmat'
+  | 'documents'
+  | 'equipment'
+  | 'agri'
+  | 'other';
+
 export interface Tenant {
   id: string;
   name: string;
@@ -107,6 +117,8 @@ export interface Tenant {
   phone: string;
   email?: string;
   address?: string;
+  intendedUse?: string; // free-text description of what the tenant stores/uses the space for
+  commodityCategory?: CommodityCategory;
   createdAt: string;
 }
 
@@ -124,6 +136,8 @@ export interface Lease {
   status: LeaseStatus;
   possessionDate?: string;
   renewalOfLeaseId?: string;
+  intendedUse?: string; // inherited from tenant at onboarding, editable per lease
+  commodityCategory?: CommodityCategory;
   createdAt: string;
 }
 
