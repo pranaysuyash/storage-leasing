@@ -84,6 +84,7 @@ export interface Facility {
   ownershipType?: 'owned' | 'leased_in' | 'managed' | 'sub_leased' | 'government' | 'cooperative' | 'franchise';
   landlordName?: string; // if leased_in
   landlordContact?: string;
+  gstin?: string;
   spaces: RentableSpace[];
   createdAt: string;
 }

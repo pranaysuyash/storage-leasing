@@ -21,6 +21,7 @@ export function createFacility(input: {
   ownershipType?: 'owned' | 'leased_in' | 'managed' | 'sub_leased' | 'government' | 'cooperative' | 'franchise';
   landlordName?: string;
   landlordContact?: string;
+  gstin?: string;
 }): Facility {
   if (input.usableAreaSqFt > input.totalAreaSqFt) {
     throw new Error('Usable area cannot exceed total area.');
@@ -45,6 +46,7 @@ export function createFacility(input: {
     ownershipType: input.ownershipType ?? 'owned',
     landlordName: input.landlordName,
     landlordContact: input.landlordContact,
+    gstin: input.gstin || undefined,
     spaces: [],
     createdAt: new Date().toISOString(),
   };

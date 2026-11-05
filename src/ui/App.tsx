@@ -26,6 +26,7 @@ import {
   getOverdueEntries,
   getPendingEntries,
 } from '../engine/leaseEngine';
+import { generateGstInvoice, calculateLateFee } from '../engine/gstInvoice';
 import {
   createMaintenanceTask,
   startMaintenance,
@@ -115,6 +116,12 @@ export function App() {
     reset,
   } = store;
 
+  // GST invoice (local UI)
+  const [invoiceEntryId, setInvoiceEntryId] = useState<string>('');
+  const [supplierGstin, setSupplierGstin] = useState('');
+  const [supplierState, setSupplierState] = useState('');
+  const [recipientState, setRecipientState] = useState('');
+
   // Form state (local UI, not persisted).
   const [reg, setReg] = useState({
     code: '',
@@ -122,6 +129,7 @@ export function App() {
     address: '',
     city: '',
     state: '',
+    gstin: '',
     totalArea: 0,
     usableArea: 0,
     floors: 1,
@@ -184,6 +192,7 @@ export function App() {
         address: reg.address,
         city: reg.city,
         state: reg.state,
+        gstin: reg.gstin || undefined,
         totalAreaSqFt: reg.totalArea,
         usableAreaSqFt: reg.usableArea,
         floors: reg.floors,
@@ -487,6 +496,12 @@ export function App() {
                   placeholder="State"
                   value={reg.state}
                   onChange={(e) => setReg({ ...reg, state: e.currentTarget.value })}
+                />
+                <TextInput
+                  aria-label="Facility GSTIN (optional)"
+                  placeholder="GSTIN (optional)"
+                  value={reg.gstin}
+                  onChange={(e) => setReg({ ...reg, gstin: e.currentTarget.value })}
                 />
                 <Select
                   aria-label="Ownership type"
@@ -1140,6 +1155,53 @@ export function App() {
                     </table>
                   </div>
                 )}
+              </SectionCard>
+
+              <SectionCard title="GST Invoice (from ledger entry)" subtitle="Generates a tax invoice estimate from a selected ledger entry. Verify GSTIN, place of supply, and tax treatment before issuing.">
+                <Stack gap="sm">
+                  <Group gap="sm" wrap="wrap" align="flex-end">
+                    <Select
+                      aria-label="Invoice ledger entry"
+                      placeholder="Select entry for invoice"
+                      data={ledgerEntries.map((e) => ({ value: e.id, label: `${e.id.slice(0, 12)} · ${e.periodStart}` }))}
+                      value={invoiceEntryId || null}
+                      onChange={(v) => setInvoiceEntryId(v ?? '')}
+                    />
+                    <TextInput aria-label="Supplier GSTIN" placeholder="Supplier GSTIN" value={supplierGstin || facility?.gstin || ''} onChange={(e) => setSupplierGstin(e.currentTarget.value)} />
+                    <TextInput aria-label="Supplier state" placeholder="Supplier state" value={supplierState || facility?.state || ''} onChange={(e) => setSupplierState(e.currentTarget.value)} />
+                    <TextInput aria-label="Recipient state" placeholder="Recipient state (place of supply)" value={recipientState} onChange={(e) => setRecipientState(e.currentTarget.value)} />
+                  </Group>
+                  {(() => {
+                    const entry = ledgerEntries.find((e) => e.id === invoiceEntryId);
+                    if (!entry) return <Text size="sm" c="dimmed">Select a ledger entry to generate an invoice.</Text>;
+                    const tenant = tenants.find((t) => t.id === entry.tenantId);
+                    const sState = supplierState || facility?.state || '';
+                    const rState = recipientState || sState;
+                    if (!sState) return <Text size="sm" c="dimmed">Enter supplier state (and recipient state if inter-state) to compute GST.</Text>;
+                    const asOf = new Date().toISOString().slice(0, 10);
+                    const late = calculateLateFee({ dueDate: entry.dueDate, asOfDate: asOf, principal: entry.totalDue });
+                    const inv = generateGstInvoice({
+                      invoiceNumber: `INV-${entry.id.slice(-8)}`,
+                      invoiceDate: asOf,
+                      supplierGstin: supplierGstin || facility?.gstin || '',
+                      recipientGstin: tenant?.gstin,
+                      supplierState: sState,
+                      recipientState: rState,
+                      description: `Storage rent ${entry.periodStart} to ${entry.periodEnd}`,
+                      taxableValue: entry.baseRent + entry.electricityCharge + entry.otherCharges,
+                      lateFee: late > 0 ? late : undefined,
+                    });
+                    return (
+                      <div style={{ overflowX: 'auto' }}>
+                        <table className="data-table">
+                          <thead><tr><th scope="col">Invoice</th><th scope="col">Place of supply</th><th scope="col" style={{ textAlign:'right' }}>Taxable</th><th scope="col" style={{ textAlign:'right' }}>CGST</th><th scope="col" style={{ textAlign:'right' }}>SGST</th><th scope="col" style={{ textAlign:'right' }}>IGST</th><th scope="col" style={{ textAlign:'right' }}>Total</th></tr></thead>
+                          <tbody><tr><td className="mono">{inv.invoiceNumber}</td><td>{inv.placeOfSupply} ({inv.intraState ? 'intra' : 'inter'}-state)</td><td style={{ textAlign:'right' }}>₹{inv.totalTaxable}</td><td style={{ textAlign:'right' }}>₹{inv.totalCgst}</td><td style={{ textAlign:'right' }}>₹{inv.totalSgst}</td><td style={{ textAlign:'right' }}>₹{inv.totalIgst}</td><td style={{ textAlign:'right' }}><strong>₹{inv.grandTotal}</strong></td></tr></tbody>
+                        </table>
+                        {late > 0 && <Text size="xs" c="dimmed" mt={4}>Includes late fee estimate ₹{late} (verify before invoicing).</Text>}
+                      </div>
+                    );
+                  })()}
+                </Stack>
               </SectionCard>
 
               {receipts.length > 0 && (

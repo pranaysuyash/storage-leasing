@@ -70,6 +70,14 @@ describe('P09 Facility & Space Model', () => {
     expect(() => setSpaceStatus(f, 'NOPE', 'vacant')).toThrow();
   });
 
+  it('stores optional GSTIN on facility', () => {
+    const f = createFacility({
+      id: 'FG', code: 'WHG', name: 'GST Warehouse', address: 'Addr', city: 'Bengaluru', state: 'Karnataka',
+      totalAreaSqFt: 10000, usableAreaSqFt: 8000, floors: 1, gstin: '29ABCDE1234F1Z5',
+    });
+    expect(f.gstin).toBe('29ABCDE1234F1Z5');
+  });
+
   it('computes facility metrics correctly', () => {
     const f = createFacility({ id: 'F8', code: 'WH8', name: 'W', address: 'A', city: 'C', state: 'S', totalAreaSqFt: 10000, usableAreaSqFt: 9000, floors: 1 });
     addSpace(f, { id: 'S1', code: 'R1', name: 'Room1', type: 'room', floor: 1, dimensions: { lengthFt: 30, widthFt: 20 }, environmentalClass: 'ambient', status: 'leased' });
