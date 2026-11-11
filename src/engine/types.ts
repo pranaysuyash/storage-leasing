@@ -163,6 +163,17 @@ export interface Lease {
   createdAt: string;
 }
 
+export interface PaymentTransaction {
+  transactionId: string;
+  paidDate: string;
+  amountReceived: number;
+  amountApplied: number;
+  overpayment: number;
+  receiptNumber?: string;
+  recordedAt: string;
+  source: 'user-entered';
+}
+
 export interface RentLedgerEntry {
   id: string;
   leaseId: string;
@@ -191,6 +202,10 @@ export interface RentLedgerEntry {
   receiptNumber?: string;
   /** Last transaction receipt details (additive). Full payment transaction ledger is a separate decision. */
   lastReceiptAmount?: number;
+  /** Unexplained amount already applied before detailed payment history began. */
+  paymentHistoryOpeningApplied?: number;
+  paymentHistoryOpeningOverpaid?: number;
+  paymentTransactions?: PaymentTransaction[];
   notes?: string;
 }
 
@@ -275,7 +290,7 @@ export interface StorageEvent {
   leaseId?: string;
   actor: string;
   payload: Record<string, unknown>;
-  verificationStatus: 'simulated' | 'observed' | 'published';
+  verificationStatus: 'reported' | 'simulated' | 'observed' | 'published';
 }
 
 export interface FacilityMetrics {
@@ -285,7 +300,8 @@ export interface FacilityMetrics {
   vacantAreaSqFt: number;
   blockedAreaSqFt: number;
   underRepairAreaSqFt: number;
-  occupancyPercent: number;
+  /** null when facility usable area is not configured (> 0); never present a false 0% occupancy. */
+  occupancyPercent: number | null;
   /** Sum of all modeled space areaSqFt values (independent of facility usable/total). */
   modeledSpaceAreaSqFt: number;
   /** Optional: not computed by computeFacilityMetrics; rent due/overdue come from rent summary selectors. */

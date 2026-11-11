@@ -52,8 +52,8 @@ export function createLease(input: CreateLeaseInput, space: RentableSpace): Leas
       throw new Error(`Space ${space.code} is not available for leasing (status: ${space.status}).`);
     }
   }
-  const billingQuantity = input.billingQuantity ?? (input.billingUnit === 'sqft_month' ? space.areaSqFt : 1);
-  if (billingQuantity < 0) throw new Error('Billing quantity cannot be negative.');
+  const billingQuantity = input.billingQuantity ?? (input.billingUnit === 'sqft_month' ? space.areaSqFt : input.billingUnit === 'fixed' ? 1 : undefined);
+  if (input.billingUnit !== 'revenue_share' && (!Number.isFinite(billingQuantity) || billingQuantity! <= 0)) throw new Error('A positive billing quantity is required.');
   return {
     id: input.id,
     facilityId: input.facilityId,
@@ -114,11 +114,15 @@ export function createTerminationFinalLedgerEntry(input: {
   otherCharges?: number;
 }): RentLedgerEntry {
   const billStart = input.lease.billingStartDate ?? input.lease.startDate;
-  const rawStart = input.periodStart ?? billStart;
+  const monthStart = `${input.terminationDate.slice(0, 7)}-01`;
+  const rawStart = input.periodStart ?? monthStart;
   const periodStart = rawStart < billStart ? billStart : rawStart;
   const periodEnd = input.terminationDate;
   if (periodStart > periodEnd) throw new Error('Termination final ledger period is invalid (start after termination).');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(periodEnd) || periodStart.slice(0, 7) !== periodEnd.slice(0, 7)) throw new Error('Final ledger period must be within one calendar month.');
   const billedDayCount = inclusiveDayCount(periodStart, periodEnd);
+  const [year, month] = periodEnd.split('-').map(Number);
+  const fullPeriodDayCount = new Date(Date.UTC(year, month, 0)).getUTCDate();
   return generateRentLedgerEntry({
     id: input.id,
     lease: input.lease,
@@ -132,7 +136,8 @@ export function createTerminationFinalLedgerEntry(input: {
     maintenanceCharge: input.maintenanceCharge ?? 0,
     otherCharges: input.otherCharges ?? 0,
     billedDayCount,
-    prorationBasis: `Final termination proration: ${billedDayCount} day(s) billed ${periodStart}..${periodEnd} (termination ${input.terminationDate}). Explicit operator action; auto-generation/idempotency policy pending product decision.`,
+    fullPeriodDayCount,
+    prorationBasis: `Illustrative calendar-month proration: ${billedDayCount}/${fullPeriodDayCount} day(s) billed ${periodStart}..${periodEnd} (termination ${input.terminationDate}). Explicit operator action; contract policy and auto-generation/idempotency decisions remain pending.`,
   });
 }
 
@@ -154,7 +159,9 @@ export function calculateRentForPeriod(
   }
   if (yearsElapsed < 0) yearsElapsed = 0;
   const escalatedRate = lease.rate * Math.pow(1 + lease.escalationPercentPerYear / 100, yearsElapsed);
-  const quantity = Math.max(0, lease.billingQuantity ?? (lease.billingUnit === 'fixed' ? 1 : 1));
+  if (lease.billingUnit === 'revenue_share') throw new Error('Revenue-share billing requires actual revenue and an agreed calculation policy; automatic billing is unavailable.');
+  const quantity = lease.billingUnit === 'fixed' ? 1 : lease.billingQuantity;
+  if (!Number.isFinite(quantity) || quantity! <= 0) throw new Error('Billing quantity is missing or invalid; review this lease before billing.');
   const billedDays = opts?.billedDayCount ?? inclusiveDayCount(periodStart, periodEnd);
   const fullDays = opts?.fullPeriodDayCount ?? billedDays;
   const dayRatio = fullDays > 0 ? billedDays / fullDays : 1;
@@ -165,7 +172,7 @@ export function calculateRentForPeriod(
     case 'unit_month':
     case 'tonne_month':
     case 'bag_month': {
-      const monthlyBase = escalatedRate * quantity;
+      const monthlyBase = escalatedRate * quantity!;
       baseRent = opts?.billedDayCount != null ? monthlyBase * dayRatio : monthlyBase * monthsBetween(periodStart, periodEnd);
       break;
     }
@@ -177,15 +184,11 @@ export function calculateRentForPeriod(
     case 'pallet_day':
     case 'container_day': {
       // Rate per unit per day.
-      baseRent = escalatedRate * quantity * Math.max(0, billedDays);
+      baseRent = escalatedRate * quantity! * Math.max(0, billedDays);
       break;
     }
-    case 'revenue_share':
-      // Revenue-share base rent cannot be computed without actual revenue input. Keep 0 (honest boundary).
-      baseRent = 0;
-      break;
     default:
-      baseRent = escalatedRate * quantity * monthsBetween(periodStart, periodEnd);
+      baseRent = escalatedRate * quantity! * monthsBetween(periodStart, periodEnd);
   }
 
   const totalDue = baseRent + electricityCharge + maintenanceCharge + otherCharges;
@@ -195,7 +198,7 @@ export function calculateRentForPeriod(
 function monthsBetween(start: string, end: string): number {
   const s = new Date(start);
   const e = new Date(end);
-  const months = (e.getFullYear() - s.getFullYear()) * 12 + (e.getMonth() - s.getMonth());
+  const months = (e.getUTCFullYear() - s.getUTCFullYear()) * 12 + (e.getUTCMonth() - s.getUTCMonth()) + 1;
   return Math.max(1, months || 1);
 }
 
@@ -255,19 +258,42 @@ export function generateRentLedgerEntry(input: {
   };
 }
 
+function moneyInPaise(value: number): number {
+  const scaled = value * 100;
+  const rounded = Math.round(scaled);
+  if (!Number.isFinite(value) || !Number.isSafeInteger(rounded) || Math.abs(scaled - rounded) > 1e-7) throw new Error('Amount must be a safe value in whole paise.');
+  return rounded;
+}
+
 export function recordPayment(
   entry: RentLedgerEntry,
   amount: number,
   paidDate: string,
   receiptNumber?: string
 ): { applied: number; overpaid: number } {
-  if (amount < 0) throw new Error('Payment amount cannot be negative.');
-  const remaining = Math.max(0, Math.round((entry.totalDue - entry.amountPaid) * 100) / 100);
-  const applied = Math.min(amount, remaining);
-  const overpaid = Math.round((amount - applied) * 100) / 100;
-  entry.amountPaid = Math.round((entry.amountPaid + applied) * 100) / 100;
-  entry.lastReceiptAmount = Math.round(amount * 100) / 100; // transaction amount (additive)
-  if (overpaid > 0) entry.overpaidAmount = Math.round(((entry.overpaidAmount ?? 0) + overpaid) * 100) / 100;
+  const receivedPaise = moneyInPaise(amount);
+  const duePaise = moneyInPaise(entry.totalDue);
+  const paidPaise = moneyInPaise(entry.amountPaid);
+  const priorOverpaidPaise = moneyInPaise(entry.overpaidAmount ?? 0);
+  if (receivedPaise <= 0) throw new Error('Payment amount must be positive.');
+  if (duePaise < 0 || paidPaise < 0 || paidPaise > duePaise || priorOverpaidPaise < 0) throw new Error('Ledger amounts need review before recording a payment.');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(paidDate) || !Number.isFinite(Date.parse(`${paidDate}T00:00:00Z`)) || new Date(`${paidDate}T00:00:00Z`).toISOString().slice(0, 10) !== paidDate) throw new Error('A valid payment date is required.');
+  const appliedPaise = Math.min(receivedPaise, duePaise - paidPaise);
+  const overpaidPaise = receivedPaise - appliedPaise;
+  if (!Number.isSafeInteger(priorOverpaidPaise + overpaidPaise)) throw new Error('Overpayment amount exceeds safe paise precision.');
+  const received = receivedPaise / 100;
+  const applied = appliedPaise / 100;
+  const overpaid = overpaidPaise / 100;
+  if (!entry.paymentTransactions) {
+    entry.paymentHistoryOpeningApplied = entry.amountPaid;
+    entry.paymentHistoryOpeningOverpaid = entry.overpaidAmount ?? 0;
+    entry.paymentTransactions = [];
+  }
+  const transactionId = globalThis.crypto?.randomUUID?.() ?? `pay-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  entry.paymentTransactions.push({ transactionId, paidDate, amountReceived: received, amountApplied: applied, overpayment: overpaid, receiptNumber, recordedAt: new Date().toISOString(), source: 'user-entered' });
+  entry.amountPaid = (paidPaise + appliedPaise) / 100;
+  entry.lastReceiptAmount = received;
+  if (overpaid > 0) entry.overpaidAmount = (priorOverpaidPaise + overpaidPaise) / 100;
   if (entry.amountPaid >= entry.totalDue && entry.totalDue >= 0) {
     entry.paymentStatus = 'paid';
     entry.paidDate = paidDate;
@@ -282,6 +308,17 @@ export function recordPayment(
 export function detectOverdue(entry: RentLedgerEntry, asOfDate: string): boolean {
   if (entry.paymentStatus === 'paid') return false;
   return asOfDate > entry.dueDate;
+}
+
+/** A current projection only: does not reconstruct balances as they existed on an earlier day. */
+export function paymentStatusAsOf(entry: RentLedgerEntry, asOfDate: string): 'pending' | 'partial' | 'overdue' | 'paid' | 'unknown' {
+  const validDay = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(`${value}T00:00:00Z`)) && new Date(`${value}T00:00:00Z`).toISOString().slice(0, 10) === value;
+  if (!validDay(asOfDate) || !Number.isFinite(entry.totalDue) || !Number.isFinite(entry.amountPaid) || entry.totalDue <= 0 || entry.amountPaid < 0 || entry.amountPaid > entry.totalDue) return 'unknown';
+  if (entry.amountPaid === entry.totalDue) return 'paid';
+  const due = typeof entry.dueDate === 'string' ? entry.dueDate.slice(0, 10) : '';
+  if (!validDay(due)) return 'unknown';
+  if (due < asOfDate) return 'overdue';
+  return entry.amountPaid > 0 ? 'partial' : 'pending';
 }
 
 export function updateOverdueStatus(entry: RentLedgerEntry, asOfDate: string): void {
@@ -449,17 +486,20 @@ export function generateReceiptNumber(leaseId: string, paidDate: string, suffix?
 
 export function issueReceipt(entry: RentLedgerEntry, paidDate: string, transactionAmount?: number): Receipt {
   const amount = transactionAmount ?? entry.lastReceiptAmount ?? entry.amountPaid;
-  if (amount <= 0) throw new Error('Cannot issue receipt for zero payment.');
+  const amountPaise = moneyInPaise(amount);
+  if (amountPaise <= 0) throw new Error('Cannot issue receipt for an invalid or zero payment.');
+  const latest = entry.paymentTransactions?.at(-1);
+  if (latest && (latest.receiptNumber || latest.paidDate !== paidDate || latest.amountReceived !== amountPaise / 100)) throw new Error('Receipt must match the latest unreceipted payment transaction.');
   const receiptNumber = generateReceiptNumber(entry.leaseId, paidDate);
   entry.receiptNumber = receiptNumber;
-  entry.paidDate = paidDate;
-  if (entry.amountPaid >= entry.totalDue) entry.paymentStatus = 'paid';
+  if (latest) latest.receiptNumber = receiptNumber;
+  if (entry.amountPaid >= entry.totalDue) { entry.paymentStatus = 'paid'; entry.paidDate = paidDate; }
   else if (entry.amountPaid > 0) entry.paymentStatus = 'partial';
   return {
     receiptNumber,
     leaseId: entry.leaseId,
     tenantId: entry.tenantId,
-    amount: Math.round(amount * 100) / 100,
+    amount: amountPaise / 100,
     paidDate,
     periodStart: entry.periodStart,
     periodEnd: entry.periodEnd,
