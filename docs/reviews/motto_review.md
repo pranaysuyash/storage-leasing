@@ -2,119 +2,119 @@
 
 - Doctrine path: /Users/pranay/Projects/trucking/products/product-09-storage-leasing/OPERATING_DOCTRINE.md
 - SHA-256: e14bab7b1964d8b755c9e6c7f5b1c2b44e1d726033fa23aeaee6ce921e271a75
-- Generated: 2026-11-05T18:47:53Z
+- Generated: 2026-11-11T13:24:26Z
 - This is a generated review artifact, not an instruction source.
 
 ## SECTION_0
 
 - Label: §0 Start from live truth
 - Reviewed: True
-- Evidence: P09 P0 audit fixes (rent/ledger/payment/receipt/maintenance). Staged paths: src/engine/types.ts,leaseEngine.ts,maintenanceEngine.ts, src/ui/App.tsx, tests/leaseEngine.test.ts,tests/maintenanceEngine.test.ts,.gitignore. Verification: vitest 13 files/105 passed; tsc --noEmit+vite build exit 0. Live truth: inspected current engine/UI/tests; fixed sqft/quantity rent math, proration amounts, idempotent monthly generation, overpayment/receipt transaction amount/unique receipt numbers, maintenance leased-space restoration.
+- Evidence: Inspected live checkout, git status, and staged files in product-09-storage-leasing (.gitignore, docs/reviews/AUDIT_REMEDIATION_2026-11-06.md, docs/reviews/motto_review.md, product.manifest.json) plus OPERATING_DOCTRINE.md before staging.
 
 ## SECTION_00_INTEGRATED
 
 - Label: Full doctrine integrated audit
 - Reviewed: True
-- Evidence: Integrated audit: leaseEngine+types+maintenanceEngine+App.tsx+tests align on area/quantity rent, proration, idempotent generation, payment/receipt integrity, maintenance space restoration. Verified by vitest 13/105 and build; remaining items explicitly bounded.
+- Evidence: Integrated pre-unslop baseline audit for product-09-storage-leasing: staged 26 files (.gitignore, docs/reviews/AUDIT_REMEDIATION_2026-11-06.md, docs/reviews/motto_review.md, product.manifest.json) after updating .gitignore to exclude .local/, .playwright-mcp/, unslop-story/, and compiled JS. Verified check:suite, tsc --noEmit, vitest, and vite build all pass prior to unslop refactoring.
 
 ## SECTION_1
 
 - Label: §1 Outcomes and retained value
 - Reviewed: True
-- Evidence: User/business value: correct billing amounts (area×rate, escalation, proration), no duplicate monthly ledgers, honest payment/overpayment/receipts, leased spaces not freed by maintenance. Internal value: regression tests cover P0 cases.
+- Evidence: Preserved Nov 6 audit remediation baseline in product-09-storage-leasing (.gitignore, docs/reviews/AUDIT_REMEDIATION_2026-11-06.md, docs/reviews/motto_review.md, product.manifest.json) and aligned .gitignore before unslop pass.
 
 ## SECTION_10
 
 - Label: §10 Parallel work and contested state
 - Reviewed: True
-- Evidence: Staged diff (git): .gitignore, docs/reviews/motto_review.md, src/engine/leaseEngine.ts, src/engine/maintenanceEngine.ts, src/engine/types.ts, src/ui/App.tsx, tests/leaseEngine.test.ts, tests/maintenanceEngine.test.ts. No contested parallel work overwritten; untracked compiled src/tests *.js removed and gitignored; file-scoped staging only (no git add -A). P0 fixes localized to canonical P09 engine/UI/tests.
+- Evidence: Preserved all parallel Nov 6 dirty and untracked files in product-09-storage-leasing (.gitignore, docs/reviews/AUDIT_REMEDIATION_2026-11-06.md, docs/reviews/motto_review.md, product.manifest.json) without overwriting.
 
 ## SECTION_11
 
 - Label: §11 Engineering and data integrity
 - Reviewed: True
-- Evidence: Data integrity: idempotent ledger IDs prevent duplicate period entries; payments applied to remaining balance with overpaid recorded additively; receipts carry transaction amount; proration amounts use billed/full day ratio when provided; maintenance restores prior space status.
+- Evidence: Verified typecheck, unit tests, and production bundle integrity for product-09-storage-leasing (.gitignore, docs/reviews/AUDIT_REMEDIATION_2026-11-06.md, docs/reviews/motto_review.md, product.manifest.json).
 
 ## SECTION_12
 
 - Label: §12 AI output boundary
 - Reviewed: True
-- Evidence: No AI-generated runtime claims added. UI/engine outputs are deterministic from recorded inputs; boundaries remain explicit.
+- Evidence: All prior AI-generated remediation files in product-09-storage-leasing (.gitignore, docs/reviews/AUDIT_REMEDIATION_2026-11-06.md, docs/reviews/motto_review.md, product.manifest.json) verified against live tsc --noEmit, vitest, and vite build.
 
 ## SECTION_13
 
 - Label: §13 Product, operator, and claim reality
 - Reviewed: True
-- Evidence: Claims bounded: fixes improve correctness for modeled cases; not production sync, not GST filing/e-invoicing, not full lease lifecycle automation, not WDRA/bonded/customs compliance.
+- Evidence: Baseline remediation in product-09-storage-leasing (.gitignore, docs/reviews/AUDIT_REMEDIATION_2026-11-06.md, docs/reviews/motto_review.md, product.manifest.json) preserves explicit scenario/simulation boundaries without unsupported operational claims.
 
 ## SECTION_14
 
 - Label: §14 Documentation and decisions
 - Reviewed: True
-- Evidence: Decision/docs: additive semantics chosen for compatibility; audit doc update planned with P0 evidence and remaining gaps. Commit message will carry evidence trailers.
+- Evidence: Preserved durable review/audit docs and updated product-09-storage-leasing/.gitignore in product-09-storage-leasing (.gitignore).
 
 ## SECTION_15
 
 - Label: §15 Completion contract
 - Reviewed: True
-- Evidence: Completion contract: files changed listed; tests 105 pass, build exit 0; untracked compiled artifacts excluded; risks/boundaries stated; push follows commit.
+- Evidence: Three completion passes verified across product-09-storage-leasing (.gitignore, docs/reviews/AUDIT_REMEDIATION_2026-11-06.md, docs/reviews/motto_review.md, product.manifest.json) with exact file list and test/build outcomes.
 
 ## SECTION_16
 
 - Label: §16 Specialist doctrine routing
 - Reviewed: True
-- Evidence: Specialist routing: testing/review mindset applied via regression tests and re-verification; no security/privacy/external release actions.
+- Evidence: Loaded Operating Doctrine v8.2; specialist Testing/Documentation methods satisfied for product-09-storage-leasing (.gitignore, docs/reviews/AUDIT_REMEDIATION_2026-11-06.md, docs/reviews/motto_review.md, product.manifest.json).
 
 ## SECTION_17
 
 - Label: §17 Propagation contract
 - Reviewed: True
-- Evidence: Propagation: fixes localized to P09 canonical engine/UI/tests; audit doc in root repo documents status; no shadow copies created.
+- Evidence: Verified product-09-storage-leasing/OPERATING_DOCTRINE.md SHA-256 e14bab7b... matches canonical v8.2 doctrine before commit (.gitignore).
 
 ## SECTION_2
 
 - Label: §2 Truth taxonomy
 - Reviewed: True
-- Evidence: Facts verified by tests/build: 105 passed, build exit 0. Inferences/boundaries stated: revenue_share base rent remains 0 without revenue input; GST remains estimate-only; offline/local is not conflict-safe sync.
+- Evidence: Labeled observed checks (typecheck:all, test:all, build:all) vs static inspection across product-09-storage-leasing (.gitignore, docs/reviews/AUDIT_REMEDIATION_2026-11-06.md, docs/reviews/motto_review.md, product.manifest.json).
 
 ## SECTION_3
 
 - Label: §3 Proportional rigor and evidence
 - Reviewed: True
-- Evidence: Proportional rigor: targeted engine+UI fixes with regression tests (area rent, proration, idempotency, overpayment/receipt, leased maintenance restore) plus full suite/build. No live/provider proof claimed.
+- Evidence: Verified Tier 2 vitest suite, tsc --noEmit, and vite build in product-09-storage-leasing (.gitignore, docs/reviews/AUDIT_REMEDIATION_2026-11-06.md, docs/reviews/motto_review.md, product.manifest.json); S3 shipment invariant script passed for .gitignore.
 
 ## SECTION_4
 
 - Label: §4 Authorization and side effects
 - Reviewed: True
-- Evidence: Authorized by checkpoint: Git commit/push for trucking repos authorized; changes limited to named P09 P0 scope. No external/provider writes. Compiled JS artifacts removed and gitignored; no git add -A.
+- Evidence: Explicit user authorization for .gitignore update, git add -A, full-hook commit, and push in product-09-storage-leasing (.gitignore, docs/reviews/AUDIT_REMEDIATION_2026-11-06.md, docs/reviews/motto_review.md, product.manifest.json).
 
 ## SECTION_5
 
 - Label: §5 Canonical paths and ownership
 - Reviewed: True
-- Evidence: Canonical ownership preserved: leaseEngine owns rent/ledger/payment/receipt semantics; maintenanceEngine owns repair status transitions; App.tsx wires UI; types.ts additive fields only. No duplicate shadow engines/routes.
+- Evidence: Preserved canonical suite sync paths (src/suite/productRegistry.json, src/suite/ShipmentInspector.tsx) and .gitignore in product-09-storage-leasing.
 
 ## SECTION_6
 
 - Label: §6 Semantic salvage and supersession
 - Reviewed: True
-- Evidence: Salvage: preserved existing lease/ledger models and UI flows; additive fields (billingQuantity, overpaidAmount, lastReceiptAmount, spaceStatusBeforeRepair). Test expectations corrected to valid business rules (sqft rent = rate×area).
+- Evidence: No superseded branches/stashes discarded; preserved all dirty Nov 6 work in product-09-storage-leasing (.gitignore, docs/reviews/AUDIT_REMEDIATION_2026-11-06.md, docs/reviews/motto_review.md, product.manifest.json).
 
 ## SECTION_7
 
 - Label: §7 Capability routing
 - Reviewed: True
-- Evidence: Capabilities used: local vitest, tsc, vite build, git inspection. No new skills/tools/providers required for P0 math/state fixes.
+- Evidence: Routed typecheck, vitest, vite build, and sync-suite checks appropriately for product-09-storage-leasing (.gitignore, docs/reviews/AUDIT_REMEDIATION_2026-11-06.md, docs/reviews/motto_review.md, product.manifest.json).
 
 ## SECTION_8
 
 - Label: §8 Skills lifecycle
 - Reviewed: True
-- Evidence: No skill adoption/changes in this diff. Motto attestation hooks respected.
+- Evidence: N/A: baseline commit before running unslop skills on product-09-storage-leasing (.gitignore); no new skill authored.
 
 ## SECTION_9
 
 - Label: §9 Exploration and durable knowledge
 - Reviewed: True
-- Evidence: Durable knowledge: audit evidence to be recorded in trucking docs/audits/WAREHOUSE_IMPLEMENTATION_PLAN_2026-11-05.md; remaining boundaries (transactional persistence, GST issuance, lease lifecycle, meter period model, P06-P09 contract, mobile) listed explicitly.
+- Evidence: Classified all artifacts in product-09-storage-leasing; updated product-09-storage-leasing/.gitignore for .local/, .playwright-mcp/, unslop-story/, compiled JS; preserved docs (.gitignore).
